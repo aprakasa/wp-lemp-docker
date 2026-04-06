@@ -1,0 +1,182 @@
+services:
+  nginx:
+    image: ghcr.io/aprakasa/nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/scripts:/etc/nginx/scripts:ro
+      - ./nginx/entrypoint.sh:/entrypoint.sh:ro
+      - wordpress_data:/var/www/html:ro
+      - nginx_cache:/var/cache/nginx
+      - nginx_logs:/var/log/nginx
+      - ssl_certs:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+      - php_fpm_socket:/var/run/php-fpm
+    depends_on:
+      php-fpm:
+        condition: service_started
+    networks:
+      - frontend
+      - backend
+    environment:
+      - DOMAIN=${DOMAIN}
+      - CACHE_MODE=${CACHE_MODE:-fastcgi-cache}
+      - WP_MULTISITE=${WP_MULTISITE:-no}
+      - SSL=${SSL:-0}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+      - DAC_OVERRIDE
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    entrypoint: ["/entrypoint.sh"]
+
+  php-fpm:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    container_name: php-fpm
+    restart: unless-stopped
+    volumes:
+      - wordpress_data:/var/www/html
+      - php_fpm_socket:/var/run/php-fpm
+      - redis_socket:/var/run/redis
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    environment:
+      - DOMAIN=${DOMAIN}
+      - MARIADB_HOST=${MARIADB_HOST}
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - REDIS_HOST=/var/run/redis/redis.sock
+      - CACHE_MODE=${CACHE_MODE:-fastcgi-cache}
+      - WP_MULTISITE=${WP_MULTISITE:-no}
+      - WP_VERSION=${WP_VERSION:-latest}
+      - WP_LOCALE=${WP_LOCALE:-en_US}
+      - WORDPRESS_SITE_TITLE=${WORDPRESS_SITE_TITLE:-WordPress}
+      - WORDPRESS_ADMIN_USER=${WORDPRESS_ADMIN_USER:-admin}
+      - WORDPRESS_ADMIN_PASSWORD=${WORDPRESS_ADMIN_PASSWORD}
+      - WORDPRESS_ADMIN_EMAIL=${WORDPRESS_ADMIN_EMAIL}
+      - SSL=${SSL:-0}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD", "php-fpm", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  mariadb:
+    image: mariadb:12
+    container_name: mariadb
+    restart: unless-stopped
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - mariadb_socket:/var/run/mysqld
+    networks:
+      - backend
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      --bind-address=localhost
+      --socket=/var/run/mysqld/mysqld.sock
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+      - redis_socket:/var/run/redis
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD", "redis-cli", "-s", "/var/run/redis/redis.sock", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      redis-server
+      --bind ""
+      --unixsocket /var/run/redis/redis.sock
+      --unixsocketperm 777
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --save 300 100
+      --appendonly yes
+
+volumes:
+  wordpress_data:
+  mariadb_data:
+  mariadb_socket:
+  redis_data:
+  redis_socket:
+  php_fpm_socket:
+  nginx_cache:
+  nginx_logs:
+  ssl_certs:
+  certbot_webroot:
+
+networks:
+  frontend:
+  backend:
+    internal: true
