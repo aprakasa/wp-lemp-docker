@@ -50,21 +50,24 @@ services:
     entrypoint: ["/entrypoint.sh"]
 
   php-fpm:
-    build:
-      context: ./php
-      dockerfile: Dockerfile
+    image: ghcr.io/aprakasa/php-fpm:${PHP_VERSION:-8.5}
     container_name: php-fpm
     restart: unless-stopped
     volumes:
       - wordpress_data:/var/www/html
       - php_fpm_socket:/var/run/php-fpm
       - redis_socket:/var/run/redis
+      - ./php/entrypoint.sh:/entrypoint.sh:ro
+      - ./php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro
+      - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+      - ./php/zz-docker.conf:/usr/local/etc/php-fpm.d/zz-docker.conf:ro
     depends_on:
       mariadb:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
+      - frontend
       - backend
     environment:
       - DOMAIN=${DOMAIN}
@@ -91,6 +94,8 @@ services:
       - CHOWN
       - SETGID
       - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
     healthcheck:
       test: ["CMD", "php-fpm", "-t"]
       interval: 30s
@@ -105,6 +110,7 @@ services:
     volumes:
       - mariadb_data:/var/lib/mysql
       - mariadb_socket:/var/run/mysqld
+      - ./mariadb/custom.cnf:/etc/mysql/conf.d/custom.cnf:ro
     networks:
       - backend
     environment:
@@ -129,11 +135,10 @@ services:
       retries: 5
       start_period: 30s
     command: >
-      --bind-address=localhost
       --socket=/var/run/mysqld/mysqld.sock
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: redis
     restart: unless-stopped
     volumes:
@@ -146,6 +151,7 @@ services:
     cap_drop:
       - ALL
     cap_add:
+      - CHOWN
       - SETGID
       - SETUID
     healthcheck:
@@ -153,16 +159,49 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    entrypoint: []
     command: >
-      redis-server
-      --bind ""
+      sh -c "mkdir -p /var/run/redis && chown redis:redis /var/run/redis
+      && exec su redis -s /bin/sh -c 'redis-server
+      --bind \"\"
       --unixsocket /var/run/redis/redis.sock
       --unixsocketperm 777
-      --maxmemory 128mb
+      --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --save 60 1000
       --save 300 100
-      --appendonly yes
+      --appendonly yes'"
+
+  wp-cron:
+    image: ghcr.io/aprakasa/php-fpm:${PHP_VERSION:-8.5}
+    container_name: wp-cron
+    restart: unless-stopped
+    volumes:
+      - wordpress_data:/var/www/html
+      - redis_socket:/var/run/redis
+      - ./php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro
+      - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+    depends_on:
+      php-fpm:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+    networks:
+      - backend
+    environment:
+      - DOMAIN=${DOMAIN}
+      - MARIADB_HOST=${MARIADB_HOST}
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    entrypoint: []
+    command: >
+      sh -c "echo '*/1 * * * * cd /var/www/html && wp cron event run --all --allow-root >> /var/log/wp-cron.log 2>&1' > /etc/crontabs/root
+      && crond -f -l 2"
 
 volumes:
   wordpress_data:
