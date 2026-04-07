@@ -14,7 +14,7 @@ services:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/scripts:/etc/nginx/scripts:ro
       - ./nginx/entrypoint.sh:/entrypoint.sh:ro
-      - wordpress_data:/var/www/html:ro
+      - ./wordpress:/var/www/html:ro
       - nginx_cache:/var/cache/nginx
       - nginx_logs:/var/log/nginx
       - ssl_certs:/etc/letsencrypt
@@ -54,7 +54,7 @@ services:
     container_name: php-fpm
     restart: unless-stopped
     volumes:
-      - wordpress_data:/var/www/html
+      - ./wordpress:/var/www/html
       - php_fpm_socket:/var/run/php-fpm
       - redis_socket:/var/run/redis
       - ./php/entrypoint.sh:/entrypoint.sh:ro
@@ -177,7 +177,7 @@ services:
     container_name: wp-cron
     restart: unless-stopped
     volumes:
-      - wordpress_data:/var/www/html
+      - ./wordpress:/var/www/html
       - redis_socket:/var/run/redis
       - ./php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro
       - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
@@ -204,7 +204,6 @@ services:
       && crond -f -l 2"
 
 volumes:
-  wordpress_data:
   mariadb_data:
   mariadb_socket:
   redis_data:

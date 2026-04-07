@@ -1,4 +1,5 @@
 .env
+wordpress/
 
 # OS files
 .DS_Store
