@@ -49,25 +49,19 @@ if [ ! -f "${WORDPRESS_DIR}/wp-config.php" ]; then
         --dbcollate=utf8mb4_unicode_ci
 
     # WordPress settings
-    $WP_CLI config set WP_REDIS_HOST "${REDIS_HOST:-/var/run/redis/redis.sock}" --raw
+    $WP_CLI config set WP_REDIS_SCHEME unix
+    $WP_CLI config set WP_REDIS_PATH "${REDIS_HOST:-/var/run/redis/redis.sock}"
     $WP_CLI config set WP_REDIS_DATABASE 1 --raw
     $WP_CLI config set WP_CACHE true --raw
     $WP_CLI config set DISABLE_WP_CRON true --raw
-    $WP_CLI config set WP_MEMORY_LIMIT '256M' --raw
-    $WP_CLI config set WP_MAX_MEMORY_LIMIT '512M' --raw
-    $WP_CLI config set FS_METHOD 'direct' --raw
+    $WP_CLI config set WP_MEMORY_LIMIT '256M'
+    $WP_CLI config set WP_MAX_MEMORY_LIMIT '512M'
+    $WP_CLI config set FS_METHOD 'direct'
     $WP_CLI config set DISALLOW_FILE_EDIT true --raw
 
-    # Add salts
     SALTS=$(curl -sf https://api.wordpress.org/secret-key/1.1/salt/ 2>/dev/null || true)
     if [ -n "$SALTS" ]; then
-        echo "$SALTS" | while read -r line; do
-            key=$(echo "$line" | sed -n "s/define.*'\([^']*\)'.*/\1/p")
-            val=$(echo "$line" | sed -n "s/define.*'[^']*'.*'\\(.*\\)'.*/\\1/p")
-            if [ -n "$key" ] && [ -n "$val" ]; then
-                $WP_CLI config set "$key" "$val"
-            fi
-        done
+        grep -q "AUTH_KEY" "${WORDPRESS_DIR}/wp-config.php" || echo "$SALTS" >> "${WORDPRESS_DIR}/wp-config.php"
     fi
 
     # Multisite configuration
@@ -119,6 +113,7 @@ echo "Setting up cache mode: ${CACHE_MODE:-fastcgi-cache}"
 case "${CACHE_MODE:-fastcgi-cache}" in
     fastcgi-cache)
         $WP_CLI plugin install nginx-helper --activate 2>/dev/null || true
+        $WP_CLI eval 'get_role("administrator")->add_cap("Nginx Helper | Config"); get_role("administrator")->add_cap("Nginx Helper | Purge cache");' 2>/dev/null || true
         $WP_CLI option update rt_wp_nginx_helper_options 'a:6:{s:12:"enable_purge";s:1:"1";s:12:"purge_method";s:13:"fastcgi_purge";s:16:"purge_homepage";s:1:"1";s:16:"purge_archives";s:1:"1";s:14:"purge_single";s:1:"1";s:10:"log_level";s:4:"INFO";}' --format=serialize 2>/dev/null || true
         ;;
     wp-rocket)
@@ -132,6 +127,7 @@ case "${CACHE_MODE:-fastcgi-cache}" in
         ;;
     redis-cache)
         $WP_CLI plugin install nginx-helper --activate 2>/dev/null || true
+        $WP_CLI eval 'get_role("administrator")->add_cap("Nginx Helper | Config"); get_role("administrator")->add_cap("Nginx Helper | Purge cache");' 2>/dev/null || true
         ;;
 esac
 
@@ -157,4 +153,4 @@ find "${WORDPRESS_DIR}" -type f -exec chmod 644 {} \;
 chown -R www-data:www-data "${WORDPRESS_DIR}"
 
 echo "PHP-FPM setup complete."
-exec php-fpm
+exec php-fpm -F
