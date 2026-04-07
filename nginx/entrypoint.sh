@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -euo pipefail
 
 NGINX_CONF_DIR="/etc/nginx"
