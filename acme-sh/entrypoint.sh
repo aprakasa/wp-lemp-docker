@@ -25,14 +25,6 @@ else
         ACME_ARGS="${ACME_ARGS} --staging"
     fi
 
-    echo "Waiting for nginx to be ready..."
-    max_wait=60
-    waited=0
-    while [ ! -d "${WEBROOT}/.well-known" ] && [ $waited -lt $max_wait ]; do
-        sleep 2
-        waited=$((waited + 2))
-    done
-
     acme.sh --register-account -m "${SSL_EMAIL}"
     acme.sh --set-default-ca --server letsencrypt
 
