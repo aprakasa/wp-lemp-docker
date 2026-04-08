@@ -22,7 +22,7 @@ services:
       - php_fpm_socket:/var/run/php-fpm
     depends_on:
       php-fpm:
-        condition: service_started
+        condition: service_healthy
     networks:
       - frontend
       - backend
@@ -58,6 +58,7 @@ services:
       - php_fpm_socket:/var/run/php-fpm
       - redis_socket:/var/run/redis
       - ./php/entrypoint.sh:/entrypoint.sh:ro
+      - ./php/healthcheck.sh:/healthcheck.sh:ro
       - ./php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro
       - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
       - ./php/zz-docker.conf:/usr/local/etc/php-fpm.d/zz-docker.conf:ro
@@ -97,11 +98,11 @@ services:
       - DAC_OVERRIDE
       - FOWNER
     healthcheck:
-      test: ["CMD", "php-fpm", "-t"]
-      interval: 30s
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 30
+      start_period: 60s
 
   mariadb:
     image: mariadb:12
