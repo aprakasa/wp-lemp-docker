@@ -168,8 +168,28 @@ render_config() {
     echo "Nginx configuration rendered successfully"
 }
 
+ensure_curl() {
+    if command -v curl > /dev/null 2>&1; then
+        return 0
+    fi
+    echo "Installing curl..."
+    if command -v apk > /dev/null 2>&1; then
+        apk add --no-cache curl
+    elif command -v apt-get > /dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq curl
+    else
+        echo "ERROR: Cannot install curl (no apk or apt-get)"
+        return 1
+    fi
+}
+
 obtain_certificate() {
     echo "=== Auto-SSL: Obtaining certificate for ${DOMAIN} ==="
+
+    if ! ensure_curl; then
+        echo "=== FAILED: curl is required but not available ==="
+        return 1
+    fi
 
     if [ ! -f ~/.acme.sh/acme.sh ]; then
         echo "Installing acme.sh..."
