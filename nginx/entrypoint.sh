@@ -1,5 +1,5 @@
 #!/bin/sh
-set -euo pipefail
+set -eu
 
 NGINX_CONF_DIR="/etc/nginx"
 TEMPLATE_DIR="${NGINX_CONF_DIR}/templates"
@@ -160,6 +160,17 @@ render_config() {
             echo "}"
             echo ""
         fi
+
+        if [ "${WP_MULTISITE}" = "subdirectory" ]; then
+            echo "# Multisite subdirectory rules"
+            echo "set \$multisite_rewrite \"\";"
+            echo "if (\$uri ~* \"^/([_0-9a-zA-Z-]+/)(wp-(content|admin|includes).*)\") {"
+            echo "    set \$multisite_rewrite \$2;"
+            echo "}"
+            echo "if (\$uri ~* \"^/([_0-9a-zA-Z-]+/)(.*\\.php)\$\") {"
+            echo "    set \$multisite_rewrite \$2;"
+            echo "}"
+        fi
     } > "${SITES_AVAILABLE}/wordpress.conf"
 
     ln -sf "${SITES_AVAILABLE}/wordpress.conf" "${SITES_ENABLED}/wordpress.conf"
@@ -177,6 +188,13 @@ switch_to_https() {
         echo "=== HTTPS config test failed, staying in HTTP mode ==="
     fi
 }
+
+cleanup() {
+    echo "Shutting down nginx..."
+    kill "${NGINX_PID:-0}" 2>/dev/null || true
+    wait "${NGINX_PID:-0}" 2>/dev/null || true
+}
+trap cleanup EXIT TERM INT
 
 if [ "${SSL}" = "1" ] && [ "${CERT_EXISTS}" = "yes" ]; then
     render_config "1"
