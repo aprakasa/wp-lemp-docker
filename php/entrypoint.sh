@@ -10,15 +10,13 @@ mkdir -p /var/run/php-fpm
 chown www-data:www-data /var/run/php-fpm
 mkdir -p /var/log/php
 
-# Start PHP-FPM in background first (socket will be available)
-php-fpm -D
-PHP_FPM_PID=$!
+# Start PHP-FPM (it will daemonize itself)
+php-fpm
 
 # Function to cleanup PHP-FPM on exit
 cleanup() {
-    if kill -0 $PHP_FPM_PID 2>/dev/null; then
-        kill $PHP_FPM_PID 2>/dev/null || true
-    fi
+    # Kill PHP-FPM master process if running
+    pkill -x "php-fpm" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -167,6 +165,8 @@ chown -R www-data:www-data "${WORDPRESS_DIR}"
 
 echo "PHP-FPM setup complete. WordPress is ready."
 
-# Remove trap and keep PHP-FPM running
-trap - EXIT
-wait $PHP_FPM_PID
+# Keep the container running by waiting on PHP-FPM
+# PHP-FPM daemonizes itself, so we just need to stay alive
+while pgrep -x "php-fpm" > /dev/null; do
+    sleep 5
+done
