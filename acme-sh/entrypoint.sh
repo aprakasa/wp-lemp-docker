@@ -19,7 +19,7 @@ if [ -f "${CERT_DIR}/${DOMAIN}/fullchain.pem" ]; then
 else
     echo "=== Obtaining SSL certificate for ${DOMAIN} ==="
 
-    ACME_ARGS="--webroot ${WEBROOT} -d ${DOMAIN} -d www.${DOMAIN} --keylength ec-256"
+    ACME_ARGS="--webroot ${WEBROOT} -d ${DOMAIN} --keylength ec-256"
 
     if [ "${SSL_STAGING}" = "1" ]; then
         ACME_ARGS="${ACME_ARGS} --staging"
@@ -28,7 +28,11 @@ else
     acme.sh --register-account -m "${SSL_EMAIL}"
     acme.sh --set-default-ca --server letsencrypt
 
-    acme.sh --issue ${ACME_ARGS}
+    if ! acme.sh --issue ${ACME_ARGS}; then
+        echo "=== Failed to obtain certificate, will retry ==="
+        acme.sh --remove -d "${DOMAIN}" --ecc 2>/dev/null || true
+        exit 1
+    fi
 
     acme.sh --install-cert -d "${DOMAIN}" --ecc \
         --fullchain-file "${CERT_DIR}/${DOMAIN}/fullchain.pem" \
