@@ -63,7 +63,8 @@ if [ ! -f "${WORDPRESS_DIR}/wp-config.php" ]; then
 
     SALTS=$(curl -sf https://api.wordpress.org/secret-key/1.1/salt/ 2>/dev/null || true)
     if [ -n "$SALTS" ]; then
-        grep -q "AUTH_KEY" "${WORDPRESS_DIR}/wp-config.php" || echo "$SALTS" >> "${WORDPRESS_DIR}/wp-config.php"
+        sed -i '/AUTH_KEY/,/NONCE_SALT/d' "${WORDPRESS_DIR}/wp-config.php"
+        echo "$SALTS" >> "${WORDPRESS_DIR}/wp-config.php"
     fi
 
     # Multisite configuration
@@ -150,8 +151,8 @@ $WP_CLI rewrite structure '/%postname%/' 2>/dev/null || true
 
 # Set file permissions
 echo "Setting file permissions..."
-find "${WORDPRESS_DIR}" -type d -exec chmod 755 {} \;
-find "${WORDPRESS_DIR}" -type f -exec chmod 644 {} \;
+    find "${WORDPRESS_DIR}" -type d -exec chmod 755 {} +
+    find "${WORDPRESS_DIR}" -type f -exec chmod 644 {} +
 chown -R www-data:www-data "${WORDPRESS_DIR}"
 
 echo "WordPress setup complete."
