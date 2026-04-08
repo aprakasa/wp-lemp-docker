@@ -12,7 +12,6 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/snippets:/etc/nginx/snippets:ro
       - ./nginx/templates:/etc/nginx/templates:ro
-      - ./nginx/scripts:/etc/nginx/scripts:ro
       - ./nginx/entrypoint.sh:/entrypoint.sh:ro
       - ./wordpress:/var/www/html:ro
       - nginx_cache:/var/cache/nginx
@@ -31,6 +30,8 @@ services:
       - CACHE_MODE=${CACHE_MODE:-fastcgi-cache}
       - WP_MULTISITE=${WP_MULTISITE:-no}
       - SSL=${SSL:-0}
+      - SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN}}
+      - SSL_STAGING=${SSL_STAGING:-0}
     security_opt:
       - no-new-privileges:true
     cap_drop:
