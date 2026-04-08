@@ -5,3 +5,18 @@ wordpress/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs and dumps
+*.log
+*.sql
+*.bak
+
+# Docker overrides
+docker-compose.override.yml
