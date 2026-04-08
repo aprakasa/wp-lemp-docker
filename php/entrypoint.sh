@@ -4,7 +4,25 @@ set -euo pipefail
 WORDPRESS_DIR="/var/www/html"
 WP_CLI="wp --path=${WORDPRESS_DIR} --allow-root"
 
-# Wait for MariaDB
+# Setup directories and start PHP-FPM socket immediately
+echo "Starting PHP-FPM..."
+mkdir -p /var/run/php-fpm
+chown www-data:www-data /var/run/php-fpm
+mkdir -p /var/log/php
+
+# Start PHP-FPM in background first (socket will be available)
+php-fpm -D
+PHP_FPM_PID=$!
+
+# Function to cleanup PHP-FPM on exit
+cleanup() {
+    if kill -0 $PHP_FPM_PID 2>/dev/null; then
+        kill $PHP_FPM_PID 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+
+# Wait for MariaDB before WordPress setup
 echo "Waiting for MariaDB..."
 max_tries=30
 counter=0
@@ -24,11 +42,6 @@ if [ "${MARIADB_PASSWORD:-}" = "changeme" ] || [ "${MARIADB_ROOT_PASSWORD:-}" = 
     echo "ERROR: Default passwords detected. Set secure passwords in .env"
     exit 1
 fi
-
-# Setup directories
-mkdir -p /var/run/php-fpm
-chown www-data:www-data /var/run/php-fpm
-mkdir -p /var/log/php
 
 # Download WordPress if not present
 if [ ! -f "${WORDPRESS_DIR}/wp-settings.php" ]; then
@@ -152,5 +165,8 @@ find "${WORDPRESS_DIR}" -type d -exec chmod 755 {} \;
 find "${WORDPRESS_DIR}" -type f -exec chmod 644 {} \;
 chown -R www-data:www-data "${WORDPRESS_DIR}"
 
-echo "PHP-FPM setup complete."
-exec php-fpm -F
+echo "PHP-FPM setup complete. WordPress is ready."
+
+# Remove trap and keep PHP-FPM running
+trap - EXIT
+wait $PHP_FPM_PID
