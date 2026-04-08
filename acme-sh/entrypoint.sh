@@ -33,6 +33,9 @@ else
         waited=$((waited + 2))
     done
 
+    acme.sh --register-account -m "${SSL_EMAIL}"
+    acme.sh --set-default-ca --server letsencrypt
+
     acme.sh --issue ${ACME_ARGS}
 
     acme.sh --install-cert -d "${DOMAIN}" --ecc \
