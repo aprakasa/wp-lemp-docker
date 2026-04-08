@@ -3,22 +3,13 @@ set -euo pipefail
 
 WORDPRESS_DIR="/var/www/html"
 WP_CLI="wp --path=${WORDPRESS_DIR} --allow-root"
+PHP_FPM_SOCKET="/var/run/php-fpm/php-fpm.sock"
 
-# Setup directories and start PHP-FPM socket immediately
-echo "Starting PHP-FPM..."
+# Setup directories
+echo "Setting up PHP-FPM directories..."
 mkdir -p /var/run/php-fpm
 chown www-data:www-data /var/run/php-fpm
 mkdir -p /var/log/php
-
-# Start PHP-FPM (it will daemonize itself)
-php-fpm
-
-# Function to cleanup PHP-FPM on exit
-cleanup() {
-    # Kill PHP-FPM master process if running
-    pkill -x "php-fpm" 2>/dev/null || true
-}
-trap cleanup EXIT
 
 # Wait for MariaDB before WordPress setup
 echo "Waiting for MariaDB..."
@@ -163,10 +154,55 @@ find "${WORDPRESS_DIR}" -type d -exec chmod 755 {} \;
 find "${WORDPRESS_DIR}" -type f -exec chmod 644 {} \;
 chown -R www-data:www-data "${WORDPRESS_DIR}"
 
-echo "PHP-FPM setup complete. WordPress is ready."
+echo "WordPress setup complete."
 
-# Keep the container running by waiting on PHP-FPM
-# PHP-FPM daemonizes itself, so we just need to stay alive
-while pgrep -x "php-fpm" > /dev/null; do
-    sleep 5
+# Function to cleanup PHP-FPM on exit
+cleanup() {
+    echo "Shutting down PHP-FPM..."
+    pkill -x "php-fpm" 2>/dev/null || true
+}
+trap cleanup EXIT TERM INT
+
+# Start PHP-FPM only AFTER WordPress is fully configured
+echo "Starting PHP-FPM..."
+php-fpm &
+PHP_FPM_PID=$!
+
+# Wait for socket to be ready with timeout
+echo "Waiting for PHP-FPM socket..."
+max_socket_wait=30
+counter=0
+while [ ! -S "${PHP_FPM_SOCKET}" ]; do
+    counter=$((counter + 1))
+    if [ $counter -ge $max_socket_wait ]; then
+        echo "ERROR: PHP-FPM socket not created after ${max_socket_wait} seconds"
+        exit 1
+    fi
+    if ! kill -0 $PHP_FPM_PID 2>/dev/null; then
+        echo "ERROR: PHP-FPM process died"
+        exit 1
+    fi
+    sleep 1
 done
+echo "PHP-FPM socket is ready."
+
+# Wait for socket to be accepting connections by checking if it's writable
+echo "Verifying PHP-FPM is accepting connections..."
+max_conn_wait=10
+counter=0
+while true; do
+    if [ -w "${PHP_FPM_SOCKET}" ]; then
+        break
+    fi
+    counter=$((counter + 1))
+    if [ $counter -ge $max_conn_wait ]; then
+        echo "WARNING: PHP-FPM socket may not be ready for connections"
+        break
+    fi
+    sleep 1
+done
+
+echo "PHP-FPM is running and ready."
+
+# Keep the container running by waiting on PHP-FPM process
+wait $PHP_FPM_PID
