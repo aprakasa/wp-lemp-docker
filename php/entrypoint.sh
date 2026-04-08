@@ -61,11 +61,7 @@ if [ ! -f "${WORDPRESS_DIR}/wp-config.php" ]; then
     $WP_CLI config set FS_METHOD 'direct'
     $WP_CLI config set DISALLOW_FILE_EDIT true --raw
 
-    SALTS=$(curl -sf https://api.wordpress.org/secret-key/1.1/salt/ 2>/dev/null || true)
-    if [ -n "$SALTS" ]; then
-        sed -i '/AUTH_KEY/,/NONCE_SALT/d' "${WORDPRESS_DIR}/wp-config.php"
-        echo "$SALTS" >> "${WORDPRESS_DIR}/wp-config.php"
-    fi
+    $WP_CLI config shuffle-salts
 
     # Multisite configuration
     if [ "${WP_MULTISITE:-no}" != "no" ]; then
@@ -93,7 +89,7 @@ if ! $WP_CLI core is-installed 2>/dev/null; then
     echo "Installing WordPress..."
     if [ "${WP_MULTISITE:-no}" != "no" ]; then
         $WP_CLI core multisite-install \
-            --url="${DOMAIN:-localhost}" \
+            --url="$([ "${SSL:-0}" = "1" ] && echo "https" || echo "http")://${DOMAIN:-localhost}" \
             --title="${WORDPRESS_SITE_TITLE:-WordPress}" \
             --admin_user="${WORDPRESS_ADMIN_USER:-admin}" \
             --admin_password="${WORDPRESS_ADMIN_PASSWORD}" \
@@ -101,7 +97,7 @@ if ! $WP_CLI core is-installed 2>/dev/null; then
             --subdomains=$([ "${WP_MULTISITE}" = "subdomain" ] && echo "true" || echo "false")
     else
         $WP_CLI core install \
-            --url="${DOMAIN:-localhost}" \
+            --url="$([ "${SSL:-0}" = "1" ] && echo "https" || echo "http")://${DOMAIN:-localhost}" \
             --title="${WORDPRESS_SITE_TITLE:-WordPress}" \
             --admin_user="${WORDPRESS_ADMIN_USER:-admin}" \
             --admin_password="${WORDPRESS_ADMIN_PASSWORD}" \
