@@ -17,8 +17,6 @@ DOMAIN="${DOMAIN:-localhost}"
 CACHE_MODE="${CACHE_MODE:-fastcgi-cache}"
 WP_MULTISITE="${WP_MULTISITE:-no}"
 SSL="${SSL:-0}"
-SSL_EMAIL="${SSL_EMAIL:-admin@${DOMAIN}}"
-SSL_STAGING="${SSL_STAGING:-0}"
 
 CACHE_SNIPPET="${SNIPPETS}/${CACHE_MODE}.conf"
 if [ ! -f "${CACHE_SNIPPET}" ]; then
@@ -46,7 +44,7 @@ if [ "${SSL}" = "1" ]; then
     if [ "${CERT_EXISTS}" = "yes" ]; then
         echo "SSL enabled - certificate found"
     else
-        echo "SSL enabled - no certificate found, starting HTTP-only to obtain certificate"
+        echo "SSL enabled - no certificate found, starting HTTP-only (waiting for acme-sh sidecar)"
     fi
 else
     echo "SSL disabled - HTTP only mode"
@@ -168,39 +166,9 @@ render_config() {
     echo "Nginx configuration rendered successfully"
 }
 
-obtain_certificate() {
-    echo "=== Auto-SSL: Obtaining certificate for ${DOMAIN} ==="
-
-    if [ ! -f ~/.acme.sh/acme.sh ]; then
-        echo "Installing acme.sh..."
-        wget -qO- https://get.acme.sh | sh -s email="${SSL_EMAIL}"
-    fi
-
-    ACME_ARGS="--webroot /var/www/certbot -d ${DOMAIN} -d www.${DOMAIN} --keylength ec-256"
-
-    if [ "${SSL_STAGING}" = "1" ]; then
-        ACME_ARGS="${ACME_ARGS} --staging"
-    fi
-
-    echo "Issuing certificate..."
-    if ~/.acme.sh/acme.sh --issue ${ACME_ARGS}; then
-        mkdir -p "${CERT_DIR}"
-        ~/.acme.sh/acme.sh --install-cert -d "${DOMAIN}" --ecc \
-            --fullchain-file "${CERT_DIR}/fullchain.pem" \
-            --key-file "${CERT_DIR}/privkey.pem" \
-            --reloadcmd "nginx -s reload"
-        echo "=== Certificate obtained successfully ==="
-        return 0
-    else
-        echo "=== FAILED to obtain certificate. Continuing in HTTP-only mode. ==="
-        return 1
-    fi
-}
-
 switch_to_https() {
-    echo "=== Switching to HTTPS mode ==="
+    echo "=== Certificates found, switching to HTTPS ==="
     render_config "1"
-    echo "Testing HTTPS configuration..."
     if nginx -t 2>&1; then
         echo "Reloading nginx with HTTPS..."
         nginx -s reload
@@ -210,43 +178,46 @@ switch_to_https() {
     fi
 }
 
-setup_renewal_cron() {
-    echo "Setting up automatic certificate renewal (daily check)..."
-    CRON_LINE="0 3 * * * ~/.acme.sh/acme.sh --cron --home ~/.acme.sh > /dev/null 2>&1"
-    if ! crontab -l 2>/dev/null | grep -q "acme.sh --cron"; then
-        (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
-        echo "Renewal cron job installed"
-    fi
-}
-
 if [ "${SSL}" = "1" ] && [ "${CERT_EXISTS}" = "yes" ]; then
     render_config "1"
+    echo "Testing nginx configuration..."
+    nginx -t
+    echo "Nginx setup complete."
+    exec /docker-entrypoint.sh nginx -g "daemon off;"
 elif [ "${SSL}" = "1" ] && [ "${CERT_EXISTS}" = "no" ]; then
     render_config "0"
     echo "Testing nginx configuration..."
     nginx -t
-    echo "Starting nginx in HTTP-only mode to obtain certificate..."
+    echo "Starting nginx in HTTP-only mode..."
     /docker-entrypoint.sh nginx -g "daemon off;" &
     NGINX_PID=$!
 
-    sleep 3
+    echo "Waiting for SSL certificate from acme-sh sidecar..."
+    max_wait=300
+    waited=0
+    while [ ! -f "${CERT_DIR}/fullchain.pem" ] || [ ! -f "${CERT_DIR}/privkey.pem" ]; do
+        sleep 5
+        waited=$((waited + 5))
+        if [ $waited -ge $max_wait ]; then
+            echo "=== Timeout waiting for certificate (${max_wait}s). Continuing in HTTP-only mode. ==="
+            wait $NGINX_PID
+            exit 0
+        fi
+        if ! kill -0 $NGINX_PID 2>/dev/null; then
+            echo "=== Nginx process died ==="
+            exit 1
+        fi
+    done
 
-    if obtain_certificate; then
-        setup_renewal_cron
-        switch_to_https
-        wait $NGINX_PID
-    else
-        echo "=== Running in HTTP-only mode ==="
-        setup_renewal_cron
-        wait $NGINX_PID
-    fi
+    echo "Certificate detected!"
+    sleep 2
+    switch_to_https
+    wait $NGINX_PID
     exit 0
 else
     render_config "0"
+    echo "Testing nginx configuration..."
+    nginx -t
+    echo "Nginx setup complete."
+    exec /docker-entrypoint.sh nginx -g "daemon off;"
 fi
-
-echo "Testing nginx configuration..."
-nginx -t
-
-echo "Nginx setup complete."
-exec /docker-entrypoint.sh nginx -g "daemon off;"

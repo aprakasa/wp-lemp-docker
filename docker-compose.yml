@@ -30,8 +30,6 @@ services:
       - CACHE_MODE=${CACHE_MODE:-fastcgi-cache}
       - WP_MULTISITE=${WP_MULTISITE:-no}
       - SSL=${SSL:-0}
-      - SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN}}
-      - SSL_STAGING=${SSL_STAGING:-0}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -204,6 +202,25 @@ services:
     command: >
       sh -c "echo '*/1 * * * * cd /var/www/html && wp cron event run --all --allow-root >> /var/log/wp-cron.log 2>&1' > /etc/crontabs/root
       && crond -f -l 2"
+
+  acme-sh:
+    image: neilpang/acme.sh
+    container_name: acme-sh
+    restart: unless-stopped
+    volumes:
+      - ssl_certs:/etc/letsencrypt
+      - certbot_webroot:/webroot
+      - ./acme-sh/entrypoint.sh:/entrypoint.sh:ro
+    depends_on:
+      nginx:
+        condition: service_healthy
+    networks:
+      - frontend
+    environment:
+      - DOMAIN=${DOMAIN}
+      - SSL_EMAIL=${SSL_EMAIL:-admin@${DOMAIN}}
+      - SSL_STAGING=${SSL_STAGING:-0}
+    entrypoint: ["/entrypoint.sh"]
 
 volumes:
   mariadb_data:
