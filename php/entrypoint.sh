@@ -8,7 +8,7 @@ PHP_FPM_SOCKET="/var/run/php-fpm/php-fpm.sock"
 # Setup directories
 echo "Setting up PHP-FPM directories..."
 mkdir -p /var/run/php-fpm
-chown www-data:www-data /var/run/php-fpm
+chown 100:101 /var/run/php-fpm
 mkdir -p /var/log/php
 
 # Wait for MariaDB before WordPress setup
@@ -151,7 +151,7 @@ $WP_CLI rewrite structure '/%postname%/' 2>/dev/null || true
 echo "Setting file permissions..."
     find "${WORDPRESS_DIR}" -type d -exec chmod 755 {} +
     find "${WORDPRESS_DIR}" -type f -exec chmod 644 {} +
-chown -R www-data:www-data "${WORDPRESS_DIR}"
+chown -R 100:101 "${WORDPRESS_DIR}"
 
 echo "WordPress setup complete."
 
