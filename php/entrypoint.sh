@@ -61,6 +61,8 @@ if [ ! -f "${WORDPRESS_DIR}/wp-config.php" ]; then
     $WP_CLI config set FS_METHOD 'direct'
     $WP_CLI config set DISALLOW_FILE_EDIT true --raw
 
+    $WP_CLI config set RT_WP_NGINX_HELPER_CACHE_PATH '/var/cache/nginx/fastcgi' --type=constant
+
     $WP_CLI config shuffle-salts
 
     # Multisite configuration
@@ -113,7 +115,7 @@ case "${CACHE_MODE:-fastcgi-cache}" in
     fastcgi-cache)
         $WP_CLI plugin install nginx-helper --activate 2>/dev/null || true
         $WP_CLI eval 'get_role("administrator")->add_cap("Nginx Helper | Config"); get_role("administrator")->add_cap("Nginx Helper | Purge cache");' 2>/dev/null || true
-        $WP_CLI option update rt_wp_nginx_helper_options 'a:6:{s:12:"enable_purge";s:1:"1";s:12:"purge_method";s:13:"fastcgi_purge";s:16:"purge_homepage";s:1:"1";s:16:"purge_archives";s:1:"1";s:14:"purge_single";s:1:"1";s:10:"log_level";s:4:"INFO";}' --format=serialize 2>/dev/null || true
+        $WP_CLI option update rt_wp_nginx_helper_options 'a:7:{s:12:"enable_purge";s:1:"1";s:12:"purge_method";s:24:"delete_local_server_file";s:16:"purge_homepage";s:1:"1";s:16:"purge_archives";s:1:"1";s:14:"purge_single";s:1:"1";s:10:"log_level";s:4:"INFO";s:15:"cache_directory";s:27:"/var/cache/nginx/fastcgi";}' --format=serialize 2>/dev/null || true
         ;;
     wp-rocket)
         $WP_CLI plugin install wp-rocket --activate 2>/dev/null || true

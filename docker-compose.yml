@@ -59,6 +59,7 @@ services:
       - ./wordpress:/var/www/html
       - php_fpm_socket:/var/run/php-fpm
       - redis_socket:/var/run/redis
+      - nginx_cache:/var/cache/nginx
       - ./php/entrypoint.sh:/entrypoint.sh:ro
       - ./php/healthcheck.sh:/healthcheck.sh:ro
       - ./php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro
