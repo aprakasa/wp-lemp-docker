@@ -22,6 +22,7 @@ mkdir -p "${CERT_DIR}/${DOMAIN}"
 
 if [ -f "${CERT_DIR}/${DOMAIN}/fullchain.pem" ]; then
     echo "Certificate already exists for ${DOMAIN}"
+    chmod 644 "${CERT_DIR}/${DOMAIN}/privkey.pem" 2>/dev/null || true
 else
     echo "=== Obtaining SSL certificate for ${DOMAIN} ==="
 
@@ -46,6 +47,7 @@ else
         --key-file "${CERT_DIR}/${DOMAIN}/privkey.pem" \
         --reloadcmd "docker exec nginx nginx -s reload 2>/dev/null || true"
 
+    chmod 644 "${CERT_DIR}/${DOMAIN}/privkey.pem"
     echo "=== Certificate obtained successfully ==="
 fi
 
