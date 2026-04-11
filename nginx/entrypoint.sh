@@ -2,16 +2,12 @@
 set -eu
 
 NGINX_CONF_DIR="/etc/nginx"
-TEMPLATE_DIR="${NGINX_CONF_DIR}/templates"
-SITES_AVAILABLE="${NGINX_CONF_DIR}/sites-available"
-SITES_ENABLED="${NGINX_CONF_DIR}/sites-enabled"
 SNIPPETS="${NGINX_CONF_DIR}/snippets"
+CONF_DIR="/tmp/nginx-conf"
 
 mkdir -p /var/cache/nginx/fastcgi
 mkdir -p /var/log/nginx
-mkdir -p "${SITES_AVAILABLE}" "${SITES_ENABLED}" "${SNIPPETS}"
-mkdir -p /var/www/certbot
-mkdir -p /etc/letsencrypt
+mkdir -p "${CONF_DIR}"
 
 DOMAIN="${DOMAIN:-localhost}"
 CACHE_MODE="${CACHE_MODE:-fastcgi-cache}"
@@ -171,9 +167,7 @@ render_config() {
             echo "    set \$multisite_rewrite \$2;"
             echo "}"
         fi
-    } > "${SITES_AVAILABLE}/wordpress.conf"
-
-    ln -sf "${SITES_AVAILABLE}/wordpress.conf" "${SITES_ENABLED}/wordpress.conf"
+    } > "${CONF_DIR}/wordpress.conf"
     echo "Nginx configuration rendered successfully"
 }
 
