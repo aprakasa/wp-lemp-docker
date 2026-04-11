@@ -115,7 +115,7 @@ case "${CACHE_MODE:-fastcgi-cache}" in
     fastcgi-cache)
         $WP_CLI plugin install nginx-helper --activate 2>/dev/null || true
         $WP_CLI eval 'get_role("administrator")->add_cap("Nginx Helper | Config"); get_role("administrator")->add_cap("Nginx Helper | Purge cache");' 2>/dev/null || true
-        $WP_CLI option update rt_wp_nginx_helper_options 'a:7:{s:12:"enable_purge";s:1:"1";s:12:"purge_method";s:24:"delete_local_server_file";s:16:"purge_homepage";s:1:"1";s:16:"purge_archives";s:1:"1";s:14:"purge_single";s:1:"1";s:10:"log_level";s:4:"INFO";s:15:"cache_directory";s:27:"/var/cache/nginx/fastcgi";}' --format=serialize 2>/dev/null || true
+        $WP_CLI option update rt_wp_nginx_helper_options 'a:7:{s:12:"enable_purge";s:1:"1";s:12:"purge_method";s:13:"unlink_files";s:16:"purge_homepage";s:1:"1";s:16:"purge_archives";s:1:"1";s:14:"purge_single";s:1:"1";s:10:"log_level";s:4:"INFO";s:15:"cache_directory";s:27:"/var/cache/nginx/fastcgi";}' --format=serialize 2>/dev/null || true
         ;;
     wp-rocket)
         $WP_CLI plugin install wp-rocket --activate 2>/dev/null || true
